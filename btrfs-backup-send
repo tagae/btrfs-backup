@@ -1,0 +1,100 @@
+#!/bin/bash
+
+# © 2015 Sebastian Gonzalez
+# http://www.apache.org/licenses/LICENSE-2.0
+
+source "$(dirname "$0")/btrfs-backup-lib.sh"
+
+usage() {
+    cat >&2 <<EOF
+Usage: $script <base> <dest>
+
+Sends the last snapshot found in <base> to <dest>.
+
+Example: $script /var/backup /mnt/backup/root
+EOF
+    exit 1
+}
+
+(( $# == 2 )) || usage
+base=$1
+dest=$2
+shift 2
+
+mounted=false
+
+[ -d "$base" ] || die "$base must be a directory"
+
+# Atomic actions.
+{
+    flock 42
+
+    mountPoints() {
+        grep -E -v '^#' /etc/fstab | awk '{ print $2 }'
+    }
+
+    if [ ! -d "$dest" ]; then
+        external=$dest
+        while [ "$external" != "/" ]
+        do
+            echo Trying "$external"
+            if mountPoints | grep -E "$external/?$" > /dev/null; then
+                echo "Mounting $external"
+                mount "$external"
+                mounted=true
+                break
+            fi
+            external=$(dirname "$external")
+        done
+        if [ "$external" = "/" ]; then
+            die "$dest must be a directory (possibly under a mountable parent)"
+        fi
+    fi
+
+    # For incremental sending, find most recent snapshot in $dest with
+    # a parent in $base, and store it in $previous. In passing, find
+    # most recent snapshot and store it in $last.
+    while read previous; do
+        if ! [ -v last ]; then
+            last=$previous
+        fi
+        name=$(basename "$previous")
+        if [ -d "$dest/$name" ]; then
+            break
+        fi
+    done < <(find "$base" -mindepth 1 -maxdepth 1 -type d | sort --reverse)
+
+    [ -v last ] || die "No snapshots found in $base"
+
+    if [ -z "$previous" ]; then
+        echo "First submission of $name to $dest"
+    else
+        if [ "$previous" == "$last" ]; then
+            echo "No new snapshots found"
+            exit 0
+        fi
+        echo "Incremental submission of $name to $dest"
+    fi
+
+    # btrfs quirk: the snapshots used with 'send' must physically be on disk.
+    sync
+
+    if [ -t 2 ] && command -v bar >/dev/null; then
+        progress=bar
+    else
+        progress=cat
+    fi
+
+    ionice -c3 btrfs send ${previous:+-p "$previous"} "$last" | \
+        $progress | ionice -c3 btrfs receive "$dest" || \
+          { echo "Removing incomplete snapshot: $dest/$name" >&2
+            btrfs subvolume delete "$dest/$name"; }
+
+    echo "Sent subvolume $last to $dest"
+
+    if $mounted; then
+        echo "Unmounting $external"
+        umount "$external"
+    fi
+
+} 42>"$base/.backup.lock"

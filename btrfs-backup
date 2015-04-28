@@ -1,0 +1,32 @@
+#!/bin/bash
+
+set -o nounset
+set -o errexit
+set -o pipefail
+
+script=${0##*/} # shortcut for `basename $0`.
+this=$(dirname "$script")
+
+usage() {
+    echo "Usage: $script <src> <dest> <store>" >&2
+    exit 1
+}
+
+[[ $# == 3 ]] || usage
+
+src=$1
+base=$2
+store=$3
+shift 3
+
+[ -n "$src" ] || usage
+[ -n "$base" ] || usage
+[ -n "$store" ] || usage
+
+"$this"/btrfs-backup-snapshot "$src" "$base"
+"$this"/btrfs-backup-cleanup "$base"
+
+if test -d "$store"; then
+    "$this"/btrfs-backup-send "$base" "$store"
+    "$this"/btrfs-backup-cleanup "$store"
+fi

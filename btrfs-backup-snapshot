@@ -1,0 +1,36 @@
+#!/bin/bash
+
+# © 2015 Sebastián González
+# http://www.apache.org/licenses/LICENSE-2.0
+
+source "$(dirname "$0")/btrfs-backup-lib.sh"
+
+usage() {
+    cat >&2 <<EOF
+Usage: $script <src> <base>
+
+Takes a read-only snapshot of subvolume <src>.
+Stores the snapshot in <base>.
+
+Example: $script / /var/backup
+EOF
+    exit 1
+}
+
+(( $# == 2 )) || usage
+src=$1
+base=$2
+shift 2
+
+[ -d "$src" ] || die "$src must be a directory"
+[ -d "$base" ] || die "$base must be a directory"
+
+# Atomic actions.
+{
+    flock 42
+
+    name=$(now)
+    btrfs subvolume snapshot -r "$src" "$base/$name" > /dev/null
+    echo "Created read-only snapshot $name of $src in $base"
+
+} 42>"$base/.backup.lock"

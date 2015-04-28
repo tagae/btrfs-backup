@@ -1,0 +1,68 @@
+#!/bin/bash
+
+# © 2015 Sebastian Gonzalez
+# http://www.apache.org/licenses/LICENSE-2.0
+
+source "$(dirname "$0")/btrfs-backup-lib.sh"
+
+usage() {
+    cat >&2 <<EOF
+Usage: $script <base>
+
+Removes old backups from subvolume pool <base>.
+
+Example: $script /var/backup
+EOF
+    exit 1
+}
+
+(( $# == 1 )) || usage
+base=$1
+shift
+
+[ -d "$base" ] || die "$base must be a directory"
+
+# Atomic actions.
+{
+    flock 42
+
+    now=$(now)
+    day=${now%% *}
+    month=${day%-*}
+    year=${month%-*}
+
+    day() {
+        find "$base" -maxdepth 1 -type d -name "$day*"
+    }
+
+    monthButDay() {
+        find "$base" -maxdepth 1 -type d -name "$month*" -not -name "$day*"
+    }
+
+    yearButMonth() {
+        find "$base" -maxdepth 1 -type d -name "$year*" -not -name "$month*"
+    }
+
+    deleteSnapshots() {
+        count=0
+        while read snapshot
+        do
+            btrfs subvolume delete "$snapshot" > /dev/null
+            echo "Removed snapshot $snapshot"
+            count=$((count+1))
+        done
+        if ((count > 0)); then
+            echo "Cleaned up $count snapshots in $base"
+        fi
+    }
+
+    monthButLastInDay() {
+        { monthButDay
+          monthButDay | sort --reverse | sort --unique --key=1,1
+        } | sort | uniq --unique
+    }
+
+    # Delete all but last of each day in the month.
+    monthButLastInDay | deleteSnapshots
+
+} 42>"$base/.backup.lock"
