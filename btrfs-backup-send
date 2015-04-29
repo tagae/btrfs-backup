@@ -61,13 +61,14 @@ mounted=false
         if ! [ -v last ]; then
             last=$previous
         fi
-        name=$(basename "$previous")
-        if [ -d "$dest/$name" ]; then
+        if [ -d "$dest/$(basename "$previous")" ]; then
             break
         fi
     done < <(find "$base" -mindepth 1 -maxdepth 1 -type d | sort --reverse)
 
     [ -v last ] || die "No snapshots found in $base"
+
+    name=$(basename "$last")
 
     if [ -z "$previous" ]; then
         echo "First submission of $name to $dest"
