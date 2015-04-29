@@ -3,7 +3,10 @@
 # © 2015 Sebastián González
 # http://www.apache.org/licenses/LICENSE-2.0
 
-source "$(dirname "$0")/btrfs-backup-lib.sh"
+this=$(realpath "$0")
+scripts=$(dirname "$this")
+
+source "$scripts/btrfs-backup-lib.sh"
 
 usage() {
     cat >&2 <<EOF

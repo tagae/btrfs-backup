@@ -9,9 +9,14 @@
 set -o nounset
 set -o errexit
 set -o pipefail
+[ -v DEBUG ] && set -o xtrace
 
-if ! [ -v script ]; then
+if [ ! -v script ]; then
     script=${0##*/} # shortcut for `basename $0`.
+fi
+
+if [ ! -v this ]; then
+    this=$(realpath "$0")
 fi
 
 function die {
@@ -57,7 +62,7 @@ function die {
     # Dump code.
     if [ -v line ]; then
         echo "Code dump:" >&2
-        nl -ba "$0" | grep --color -5 "\b$line\b" >&2
+        nl -ba "$this" | grep --color -5 "\b$line\b" >&2
     fi
 
     # At last, die in peace.
