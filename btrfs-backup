@@ -6,25 +6,18 @@ scripts=$(dirname "$this")
 source "$scripts/btrfs-backup-lib.sh"
 
 usage() {
-    echo "Usage: $script <src> <dest> <store>" >&2
+    echo "Usage: $script <subvol> <pool> <store>" >&2
     exit 1
 }
 
-[[ $# == 3 ]] || usage
+(( $# == 3 )) || usage
 
-src=$1
-base=$2
+subvol=$1
+pool=$2
 store=$3
-shift 3
 
-[ -n "$src" ] || usage
-[ -n "$base" ] || usage
-[ -n "$store" ] || usage
+"$scripts"/btrfs-backup-snapshot "$subvol" "$pool"
+"$scripts"/btrfs-backup-send "$pool" "$store"
 
-"$scripts"/btrfs-backup-snapshot "$src" "$base"
-"$scripts"/btrfs-backup-cleanup "$base"
-
-if test -d "$store"; then
-    "$scripts"/btrfs-backup-send "$base" "$store"
-    "$scripts"/btrfs-backup-cleanup "$store"
-fi
+"$scripts"/btrfs-backup-cleanup "$pool"
+"$scripts"/btrfs-backup-cleanup "$store"

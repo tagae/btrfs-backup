@@ -10,13 +10,13 @@ source "$scripts/btrfs-backup-lib.sh"
 
 usage() {
     cat >&2 <<EOF
-Usage: $script <pool> <dest>
+Usage: $script <pool> <store>
 
-Sends the last snapshot found in <pool> to <dest>.
+Sends the last snapshot found in <pool> to <store>.
 
 Example: $script /var/backup /mnt/backup/root
 
-If <dest> resides under a mountable point that is not yet mounted, it will be
+If <store> resides under a mountable point that is not yet mounted, it will be
 mounted and unmouted automatically.
 EOF
     exit 1
@@ -24,31 +24,27 @@ EOF
 
 (( $# == 2 )) || usage
 pool=$1
-dest=$2
-shift 2
+store=$2
 
 mounted=false
 
-[ -d "$pool" ] || die "$pool must be a directory"
+[ -d "$pool" ] || die "Snapshot pool $pool must be a directory"
 
 # Atomic actions on $pool.
 {
     flock 42
 
     # Verify that snapshot pool exists (mount if necessary).
-    ensurePool "$dest"
+    ensurePool "$store"
 
-    # Cleanup when done.
-    trap 'bringDown "$dest"' EXIT
-
-    # For incremental sending, find most recent snapshot in $dest with
+    # For incremental sending, find most recent snapshot in $store with
     # a parent in $pool, and store it in $previous. In passing, find
     # most recent snapshot and store it in $last.
     while read previous; do
         if ! [ -v last ]; then
             last=$previous
         fi
-        if [ -d "$dest/$(basename "$previous")" ]; then
+        if [ -d "$store/$(basename "$previous")" ]; then
             break
         fi
     done < <(find "$pool" -mindepth 1 -maxdepth 1 -type d | sort --reverse)
@@ -58,13 +54,13 @@ mounted=false
     name=$(basename "$last")
 
     if [ -z "$previous" ]; then
-        echo "First submission of $name to $dest"
+        echo "First submission of $name to $store"
     else
         if [ "$previous" == "$last" ]; then
             echo "No new snapshots found"
             exit 0
         fi
-        echo "Incremental submission of $name to $dest"
+        echo "Incremental submission of $name to $store"
     fi
 
     # btrfs quirk: the snapshots used with 'send' must physically be on disk.
@@ -76,12 +72,12 @@ mounted=false
         progress=cat
     fi
 
-    inProgress=$dest/$name
+    inProgress=$store/$name
 
     ionice -c3 btrfs send ${previous:+-p "$previous"} "$last" | \
-        $progress | ionice -c3 btrfs receive "$dest" && \
+        $progress | ionice -c3 btrfs receive "$store" && \
             unset inProgress
 
-    echo "Sent subvolume $last to $dest"
+    echo "Sent subvolume $last to $store"
 
 } 42>"$pool/$lockfile"

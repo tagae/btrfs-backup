@@ -21,7 +21,6 @@ EOF
 
 (( $# == 1 )) || usage
 base=$1
-shift
 
 [ -d "$base" ] || die "$base must be a directory"
 
