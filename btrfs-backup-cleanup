@@ -10,9 +10,9 @@ source "$scripts/btrfs-backup-lib.sh"
 
 usage() {
     cat >&2 <<EOF
-Usage: $script <base>
+Usage: $script <pool>
 
-Removes old backups from subvolume pool <base>.
+Removes old backups from snapshot pool <pool>.
 
 Example: $script /var/backup
 EOF
@@ -20,13 +20,16 @@ EOF
 }
 
 (( $# == 1 )) || usage
-base=$1
+pool=$1
 
-[ -d "$base" ] || die "$base must be a directory"
+[ -d "$pool" ] || die "Snapshot pool $pool must be a directory"
 
 # Atomic actions.
 {
     flock 42
+
+    # Verify that snapshot pool exists (mount if necessary).
+    ensurePool "$pool"
 
     now=$(now)
     day=${now%% *}
@@ -34,15 +37,15 @@ base=$1
     year=${month%-*}
 
     day() {
-        find "$base" -maxdepth 1 -type d -name "$day*"
+        find "$pool" -maxdepth 1 -type d -name "$day*"
     }
 
     monthButDay() {
-        find "$base" -maxdepth 1 -type d -name "$month*" -not -name "$day*"
+        find "$pool" -maxdepth 1 -type d -name "$month*" -not -name "$day*"
     }
 
     yearButMonth() {
-        find "$base" -maxdepth 1 -type d -name "$year*" -not -name "$month*"
+        find "$pool" -maxdepth 1 -type d -name "$year*" -not -name "$month*"
     }
 
     deleteSnapshots() {
@@ -54,7 +57,7 @@ base=$1
             count=$((count+1))
         done
         if ((count > 0)); then
-            echo "Cleaned up $count snapshots in $base"
+            echo "Cleaned up $count snapshots in $pool"
         fi
     }
 
@@ -67,4 +70,4 @@ base=$1
     # Delete all but last of each day in the month.
     monthButLastInDay | deleteSnapshots
 
-} 42>"$base/$lockfile"
+} 42>"$pool/$lockfile"
