@@ -10,52 +10,39 @@ source "$scripts/btrfs-backup-lib.sh"
 
 usage() {
     cat >&2 <<EOF
-Usage: $script <base> <dest>
+Usage: $script <pool> <dest>
 
-Sends the last snapshot found in <base> to <dest>.
+Sends the last snapshot found in <pool> to <dest>.
 
 Example: $script /var/backup /mnt/backup/root
+
+If <dest> resides under a mountable point that is not yet mounted, it will be
+mounted and unmouted automatically.
 EOF
     exit 1
 }
 
 (( $# == 2 )) || usage
-base=$1
+pool=$1
 dest=$2
 shift 2
 
 mounted=false
 
-[ -d "$base" ] || die "$base must be a directory"
+[ -d "$pool" ] || die "$pool must be a directory"
 
-# Atomic actions.
+# Atomic actions on $pool.
 {
     flock 42
 
-    mountPoints() {
-        grep -E -v '^#' /etc/fstab | awk '{ print $2 }'
-    }
+    # Verify that snapshot pool exists (mount if necessary).
+    ensurePool "$dest"
 
-    if [ ! -d "$dest" ]; then
-        external=$dest
-        while [ "$external" != "/" ]
-        do
-            echo Trying "$external"
-            if mountPoints | grep -E "$external/?$" > /dev/null; then
-                echo "Mounting $external"
-                mount "$external"
-                mounted=true
-                break
-            fi
-            external=$(dirname "$external")
-        done
-        if [ "$external" = "/" ]; then
-            die "$dest must be a directory (possibly under a mountable parent)"
-        fi
-    fi
+    # Cleanup when done.
+    trap 'bringDown "$dest"' EXIT
 
     # For incremental sending, find most recent snapshot in $dest with
-    # a parent in $base, and store it in $previous. In passing, find
+    # a parent in $pool, and store it in $previous. In passing, find
     # most recent snapshot and store it in $last.
     while read previous; do
         if ! [ -v last ]; then
@@ -64,9 +51,9 @@ mounted=false
         if [ -d "$dest/$(basename "$previous")" ]; then
             break
         fi
-    done < <(find "$base" -mindepth 1 -maxdepth 1 -type d | sort --reverse)
+    done < <(find "$pool" -mindepth 1 -maxdepth 1 -type d | sort --reverse)
 
-    [ -v last ] || die "No snapshots found in $base"
+    [ -v last ] || die "No snapshots found in $pool"
 
     name=$(basename "$last")
 
@@ -89,16 +76,12 @@ mounted=false
         progress=cat
     fi
 
+    inProgress=$dest/$name
+
     ionice -c3 btrfs send ${previous:+-p "$previous"} "$last" | \
-        $progress | ionice -c3 btrfs receive "$dest" || \
-          { echo "Removing incomplete snapshot: $dest/$name" >&2
-            btrfs subvolume delete "$dest/$name"; }
+        $progress | ionice -c3 btrfs receive "$dest" && \
+            unset inProgress
 
     echo "Sent subvolume $last to $dest"
 
-    if $mounted; then
-        echo "Unmounting $external"
-        umount "$external"
-    fi
-
-} 42>"$base/.backup.lock"
+} 42>"$pool/$lockfile"

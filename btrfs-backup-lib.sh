@@ -9,6 +9,7 @@
 set -o nounset
 set -o errexit
 set -o pipefail
+
 [ -v DEBUG ] && set -o xtrace
 
 if [ ! -v script ]; then
@@ -72,6 +73,58 @@ function die {
 # Trap errors for logging before dying.
 trap 'die --line $LINENO --status $?' ERR
 
-function now {
+#---[ Utils ]---
+
+lockfile=.btrfs-backup-lock
+mountfile=.btrfs-backup-mount-point
+
+now() {
+    (( $# == 0 )) || die "Usage: now"
     date --rfc-3339=seconds
+}
+
+mountPoints() {
+    (( $# == 0 )) || die "Usage: mountPoints"
+    awk '/^[[:space:]]*[^#]/ { print $2 }' /etc/fstab
+}
+
+bringUp() {
+    (( $# == 1 )) || die "Usage: bringUp <pool>"
+    local pool=$1
+    local mountPoint=$(realpath "$pool")
+    while [ "$mountPoint" != "/" ]; do
+        [ -d "$pool" ] && return
+        if mountPoints | grep -E "$mountPoint/?$" > /dev/null; then
+            echo "Mounting $mountPoint"
+            mount "$mountPoint"
+            [ -d "$pool" ] || die "Could not find $pool under mount point $mountPoint"
+            echo "$mountPoint" > "$pool/$mountfile"
+            return
+        fi
+        mountPoint=$(dirname "$mountPoint")
+    done
+    die "Nonexistent snapshot pool $pool"
+}
+
+bringDown() {
+    (( $# == 1 )) || die "Usage: bringDown <pool>"
+    local pool=$1
+    [ -d "$pool" ] || return
+    if [ -v inProgress ]; then
+        echo "Removing incomplete snapshot: $inProgress" >&2
+        btrfs subvolume delete "$inProgress" > /dev/null
+    fi
+    if [ -e "$pool/$mountfile" ]; then
+        mountPoint=$(<"$pool/$mountfile")
+        rm "$pool/$mountfile"
+        echo "Unmounting $mountPoint"
+        umount "$mountPoint"
+    fi
+}
+
+ensurePool() {
+    (( $# == 1 )) || die "Usage: ensurePool <pool>"
+    local pool=$1
+    bringUp "$pool"
+    trap "bringDown '$pool'" EXIT
 }

@@ -68,4 +68,4 @@ shift
     # Delete all but last of each day in the month.
     monthButLastInDay | deleteSnapshots
 
-} 42>"$base/.backup.lock"
+} 42>"$base/$lockfile"

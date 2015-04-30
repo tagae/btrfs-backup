@@ -4,20 +4,8 @@ BTRFS backup scripts
 Setup
 -----
 
-The suggested for root filesystem backups is as follows.
 
-Local, frequent snapshot pool:
 
-    btrfs subvolume create /var/backup
-
-External snapshot storage:
-
-    btrfs subvolume create /mnt/backup/root
-
-For home directories, the setup is similar:
-
-    btrfs subvolume create /home/backup
-    btrfs subvolume create /mnt/backup/home
 
 Usage
 -----
