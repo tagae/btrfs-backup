@@ -20,7 +20,15 @@ if [ ! -v this ]; then
     this=$(realpath "$0")
 fi
 
-function die {
+if [ ! -v lockfile ]; then
+    lockfile=.btrfs-backup-lock
+fi
+
+if [ ! -v mountfile ]; then
+    mountfile=.btrfs-backup-mount-point
+fi
+
+die() {
     # Don't loop on ERR.
     trap '' ERR
 
@@ -75,42 +83,46 @@ trap 'die --line $LINENO --status $?' ERR
 
 #---[ Utils ]---
 
-lockfile=.btrfs-backup-lock
-mountfile=.btrfs-backup-mount-point
+ensure-command() {
+    (( 1 <= $# && $# <= 2 )) || echo "Usage: ensure-command <command> [package]"
+    command="$1"
+    package="${2:-$1}"
+    command -v "$command" > /dev/null || \
+        die "Command $command not found, please install the $package package."
+}
 
 now() {
     (( $# == 0 )) || die "Usage: now"
     date --rfc-3339=seconds
 }
 
-mountPoints() {
-    (( $# == 0 )) || die "Usage: mountPoints"
+mount-points() {
+    (( $# == 0 )) || die "Usage: mount-points"
     awk '/^[[:space:]]*[^#]/ { print $2 }' /etc/fstab
 }
 
-bringUp() {
-    (( $# == 1 )) || die "Usage: bringUp <pool>"
+bring-up() {
+    (( $# == 1 )) || die "Usage: bring-up <pool>"
     local pool=$1
     local mountPoint=$(realpath "$pool")
-    while [ "$mountPoint" != "/" ]; do
+    while true; do
         [ -d "$pool" ] && return
-        if mountPoints | grep -E "$mountPoint/?$" > /dev/null; then
+        if mount-points | grep -E "$mountPoint/?$" > /dev/null; then
             echo "Mounting $mountPoint"
             mount "$mountPoint"
             [ -d "$pool" ] || die "Could not find $pool under mount point $mountPoint"
             echo "$mountPoint" > "$pool/$mountfile"
             return
         fi
+        [ "$mountPoint" == "/" ] && die "Nonexistent snapshot pool $pool"
         mountPoint=$(dirname "$mountPoint")
     done
-    die "Nonexistent snapshot pool $pool"
 }
 
-bringDown() {
+bring-down() {
     (( $# == 1 )) || die "Usage: bringDown <pool>"
     local pool=$1
-    [ -d "$pool" ] || return
-    if [ -v inProgress ]; then
+    if [ -v inProgress ] && [ -d "$inProgress" ]; then
         echo "Removing incomplete snapshot: $inProgress" >&2
         btrfs subvolume delete "$inProgress" > /dev/null
     fi
@@ -122,9 +134,25 @@ bringDown() {
     fi
 }
 
-ensurePool() {
+use-pool() {
     (( $# == 1 )) || die "Usage: ensurePool <pool>"
     local pool=$1
-    bringUp "$pool"
-    trap "bringDown '$pool'" EXIT
+
+    # TODO [race condition]: the mounting and unmounting of the pool are
+    # outside the lock barrier.
+
+    # Mount if necessary.
+    bring-up "$pool"
+
+    # Open pool lockfile with fresh file descriptor. See bash(1) / REDIRECTION.
+    echo -n {fd}>"$pool/$lockfile"
+
+    # Block if pool is being used.
+    flock $fd
+
+    # Release lock and unmount pool when done.
+    trap "exec "$fd">&-; bring-down '$pool'" EXIT
 }
+
+ensure-command flock util-linux
+ensure-command btrfs btrfs-progs

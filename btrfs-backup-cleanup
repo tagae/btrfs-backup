@@ -3,7 +3,7 @@
 # © 2015 Sebastian Gonzalez
 # http://www.apache.org/licenses/LICENSE-2.0
 
-this=$(realpath "$0")
+this=$(realpath "$0" || echo "Please install GNU coreutils" >&2)
 scripts=$(dirname "$this")
 
 source "$scripts/btrfs-backup-lib.sh"
@@ -22,52 +22,43 @@ EOF
 (( $# == 1 )) || usage
 pool=$1
 
-[ -d "$pool" ] || die "Snapshot pool $pool must be a directory"
+use-pool "$pool"
 
-# Atomic actions.
-{
-    flock 42
+now=$(now)
+day=${now%% *}
+month=${day%-*}
+year=${month%-*}
 
-    # Verify that snapshot pool exists (mount if necessary).
-    ensurePool "$pool"
+day() {
+    find "$pool" -maxdepth 1 -type d -name "$day*"
+}
 
-    now=$(now)
-    day=${now%% *}
-    month=${day%-*}
-    year=${month%-*}
+monthButDay() {
+    find "$pool" -maxdepth 1 -type d -name "$month*" -not -name "$day*"
+}
 
-    day() {
-        find "$pool" -maxdepth 1 -type d -name "$day*"
-    }
+yearButMonth() {
+    find "$pool" -maxdepth 1 -type d -name "$year*" -not -name "$month*"
+}
 
-    monthButDay() {
-        find "$pool" -maxdepth 1 -type d -name "$month*" -not -name "$day*"
-    }
+deleteSnapshots() {
+    count=0
+    while read snapshot
+    do
+        btrfs subvolume delete "$snapshot" > /dev/null
+        echo "Removed snapshot $snapshot"
+        count=$((count+1))
+    done
+    if ((count > 0)); then
+        echo "Cleaned up $count snapshots in $pool"
+    fi
+}
 
-    yearButMonth() {
-        find "$pool" -maxdepth 1 -type d -name "$year*" -not -name "$month*"
-    }
+monthButLastInDay() {
+    { monthButDay
+      monthButDay | sort --reverse | sort --unique --key=1,1
+    } | sort | uniq --unique
+}
 
-    deleteSnapshots() {
-        count=0
-        while read snapshot
-        do
-            btrfs subvolume delete "$snapshot" > /dev/null
-            echo "Removed snapshot $snapshot"
-            count=$((count+1))
-        done
-        if ((count > 0)); then
-            echo "Cleaned up $count snapshots in $pool"
-        fi
-    }
-
-    monthButLastInDay() {
-        { monthButDay
-          monthButDay | sort --reverse | sort --unique --key=1,1
-        } | sort | uniq --unique
-    }
-
-    # Delete all but last of each day in the month.
-    monthButLastInDay | deleteSnapshots
-
-} 42>"$pool/$lockfile"
+# Delete all but last of each day in the month.
+monthButLastInDay | deleteSnapshots

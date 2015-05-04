@@ -3,7 +3,7 @@
 # © 2015 Sebastián González
 # http://www.apache.org/licenses/LICENSE-2.0
 
-this=$(realpath "$0")
+this=$(realpath "$0" || echo "Please install GNU coreutils" >&2)
 scripts=$(dirname "$this")
 
 source "$scripts/btrfs-backup-lib.sh"
@@ -21,21 +21,11 @@ EOF
 }
 
 (( $# == 2 )) || usage
-subvol=$1
-pool=$2
+subvol=$(realpath "$1")
+pool=$(realpath "$2")
 
-[ -d "$subvol" ] || die "Source subvolume $subvol must be a directory"
-[ -d "$pool" ] || die "Snapshot pool $pool must be a directory"
+use-pool "$pool"
 
-# Atomic actions.
-{
-    flock 42
-
-    # Verify that snapshot pool exists (mount if necessary).
-    bringUp "$pool"
-
-    name=$(now)
-    btrfs subvolume snapshot -r "$subvol" "$pool/$name" > /dev/null
-    echo "Created read-only snapshot $name of $subvol in $pool"
-
-} 42>"$pool/$lockfile"
+name=$(now)
+btrfs subvolume snapshot -r "$subvol" "$pool/$name" > /dev/null
+echo "Created read-only snapshot $name of $subvol in $pool"

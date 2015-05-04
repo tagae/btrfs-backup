@@ -3,7 +3,7 @@
 # © 2015 Sebastian Gonzalez
 # http://www.apache.org/licenses/LICENSE-2.0
 
-this=$(realpath "$0")
+this=$(realpath "$0" || echo "Please install GNU coreutils" >&2)
 scripts=$(dirname "$this")
 
 source "$scripts/btrfs-backup-lib.sh"
@@ -12,72 +12,48 @@ usage() {
     cat >&2 <<EOF
 Usage: $script <pool> <store>
 
-Sends the last snapshot found in <pool> to <store>.
+Copies all subvolumes from <pool> to <store>.
 
 Example: $script /var/backup /mnt/backup/root
-
-If <store> resides under a mountable point that is not yet mounted, it will be
-mounted and unmouted automatically.
 EOF
     exit 1
 }
 
 (( $# == 2 )) || usage
-pool=$1
-store=$2
+pool=$(realpath "$1")
+store=$(realpath "$2")
 
-mounted=false
+use-pool "$pool"
+use-pool "$store"
 
-[ -d "$pool" ] || die "Snapshot pool $pool must be a directory"
+if [ -t 2 ] && command -v bar >/dev/null; then
+    progress=bar
+else
+    progress=cat
+fi
 
-# Atomic actions on $pool.
-{
-    flock 42
+# btrfs quirk: the snapshots used with 'send' must physically be on disk.
+sync
 
-    # Verify that snapshot pool exists (mount if necessary).
-    ensurePool "$store"
+# For incremental sending, find most recent snapshot in $store with
+# a parent in $pool, and store it in $previous. In passing, find
+# most recent snapshot and store it in $last.
+while read line; do
+    subvol=$(dirname "$pool")/${line#*/} # keep path only
+    name=$(basename "$subvol")
 
-    # For incremental sending, find most recent snapshot in $store with
-    # a parent in $pool, and store it in $previous. In passing, find
-    # most recent snapshot and store it in $last.
-    while read previous; do
-        if ! [ -v last ]; then
-            last=$previous
-        fi
-        if [ -d "$store/$(basename "$previous")" ]; then
-            break
-        fi
-    done < <(find "$pool" -mindepth 1 -maxdepth 1 -type d | sort --reverse)
+    if [ ! -d "$store/$name" ]; then
 
-    [ -v last ] || die "No snapshots found in $pool"
+        echo "Copying subvolume $name to $store${previous:+ incrementally}"
 
-    name=$(basename "$last")
+        inProgress=$store/$name
 
-    if [ -z "$previous" ]; then
-        echo "First submission of $name to $store"
-    else
-        if [ "$previous" == "$last" ]; then
-            echo "No new snapshots found"
-            exit 0
-        fi
-        echo "Incremental submission of $name to $store"
+        ionice -c3 btrfs send ${previous:+-p "$pool/$previous"} "$subvol" | \
+            $progress | ionice -c3 btrfs receive "$store"
+
+        unset inProgress
     fi
 
-    # btrfs quirk: the snapshots used with 'send' must physically be on disk.
-    sync
+    previous=$name
 
-    if [ -t 2 ] && command -v bar >/dev/null; then
-        progress=bar
-    else
-        progress=cat
-    fi
-
-    inProgress=$store/$name
-
-    ionice -c3 btrfs send ${previous:+-p "$previous"} "$last" | \
-        $progress | ionice -c3 btrfs receive "$store" && \
-            unset inProgress
-
-    echo "Sent subvolume $last to $store"
-
-} 42>"$pool/$lockfile"
+done < <(btrfs subvolume list -o --sort gen "$pool")
