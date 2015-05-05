@@ -14,7 +14,7 @@ Usage: $script <pool>
 
 Removes old backups from snapshot pool <pool>.
 
-Example: $script /var/backup
+Example: $script /var/backup/home
 EOF
     exit 1
 }

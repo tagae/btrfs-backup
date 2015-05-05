@@ -14,7 +14,7 @@ Usage: $script <pool> <store>
 
 Copies all subvolumes from <pool> to <store>.
 
-Example: $script /var/backup /mnt/backup/root
+Example: $script /var/backup/home /mnt/external/backup/home
 EOF
     exit 1
 }

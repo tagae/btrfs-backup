@@ -9,17 +9,31 @@ scripts=$(dirname "$this")
 source "$scripts/btrfs-backup-lib.sh"
 
 usage() {
-    echo "Usage: $script <subvol> <pool> <store>" >&2
+    cat >&2 <<EOF
+Usage: $script <subvol> <pool> <store> [<store2> <store3> ...]
+
+Takes a snapshot of <subvol> into <pool>, and sends <pool> to the specified
+stores.
+
+Example: btrfs-backup / /var/backup/home /mnt/backup/external/home /mnt/traveller/backup/home
+EOF
     exit 1
 }
 
-(( $# == 3 )) || usage
+(( $# >= 3 )) || usage
 
 subvol=$(realpath "$1")
 pool=$(realpath "$2")
-store=$(realpath "$3")
+shift 2
 
 "$scripts"/btrfs-backup-snapshot "$subvol" "$pool"
-"$scripts"/btrfs-backup-send "$pool" "$store"
 "$scripts"/btrfs-backup-cleanup "$pool"
-"$scripts"/btrfs-backup-cleanup "$store"
+
+while (( $# > 0 )); do
+    store=$1
+    shift
+    if [ -d "$store" ]; then
+        "$scripts"/btrfs-backup-send "$pool" "$store"
+        "$scripts"/btrfs-backup-cleanup "$store"
+    fi
+done

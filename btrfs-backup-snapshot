@@ -15,7 +15,7 @@ Usage: $script <subvol> <pool>
 Takes a read-only snapshot of subvolume <subvol>.
 Stores the snapshot in <pool>.
 
-Example: $script / /var/backup
+Example: $script /home /var/backup/home
 EOF
     exit 1
 }
