@@ -83,6 +83,15 @@ trap 'die --line $LINENO --status $?' ERR
 
 #---[ Utils ]---
 
+# join , a "b c" d  -> a,b c,d
+# join / var local tmp -> var/local/tmp
+# FOO=( a b c ); join , "${FOO[@]}" -> a,b,c
+function join {
+    local IFS="$1"
+    shift
+    echo "$*";
+}
+
 ensure-command() {
     (( 1 <= $# && $# <= 2 )) || echo "Usage: ensure-command <command> [package]"
     command="$1"
@@ -120,7 +129,7 @@ bring-up() {
 }
 
 bring-down() {
-    (( $# == 1 )) || die "Usage: bringDown <pool>"
+    (( $# == 1 )) || die "Usage: bring-down <pool>"
     local pool=$1
     if [ -v inProgress ] && [ -d "$inProgress" ]; then
         echo "Removing incomplete snapshot: $inProgress" >&2
@@ -135,7 +144,7 @@ bring-down() {
 }
 
 use-pool() {
-    (( $# == 1 )) || die "Usage: ensurePool <pool>"
+    (( $# == 1 )) || die "Usage: ensure-pool <pool>"
     local pool=$1
 
     # TODO [race condition]: the mounting and unmounting of the pool are
@@ -145,13 +154,24 @@ use-pool() {
     bring-up "$pool"
 
     # Open pool lockfile with fresh file descriptor. See bash(1) / REDIRECTION.
-    echo -n {fd}>"$pool/$lockfile"
+    exec {fd}>"$pool/$lockfile"
 
     # Block if pool is being used.
     flock $fd
 
     # Release lock and unmount pool when done.
     trap "exec "$fd">&-; bring-down '$pool'" EXIT
+}
+
+# List subvolume names from most to least recent (irrespective of the name).
+subvolume-names() {
+    (( $# == 1 )) || die "Usage: list-subvolume-names <pool>"
+    local pool=$1
+    local parent=$(dirname "$pool")
+    btrfs subvolume list -o --sort=-gen "$pool" | \
+        while read line; do
+            echo ${line##*/} # keep volume name only
+        done
 }
 
 ensure-command flock util-linux

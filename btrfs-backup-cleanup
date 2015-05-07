@@ -24,41 +24,104 @@ pool=$1
 
 use-pool "$pool"
 
-now=$(now)
-day=${now%% *}
-month=${day%-*}
-year=${month%-*}
-
-day() {
-    find "$pool" -maxdepth 1 -type d -name "$day*"
-}
-
-monthButDay() {
-    find "$pool" -maxdepth 1 -type d -name "$month*" -not -name "$day*"
-}
-
-yearButMonth() {
-    find "$pool" -maxdepth 1 -type d -name "$year*" -not -name "$month*"
-}
-
-deleteSnapshots() {
-    count=0
-    while read snapshot
-    do
-        btrfs subvolume delete "$snapshot" > /dev/null
-        echo "Removed snapshot $snapshot"
-        count=$((count+1))
+patch-day-field () {
+    # Replace the separator of date and time with a dash.
+    while read line; do
+        echo ${line:0:10}-${line:11}
     done
-    if ((count > 0)); then
-        echo "Cleaned up $count snapshots in $pool"
-    fi
 }
 
-monthButLastInDay() {
-    { monthButDay
-      monthButDay | sort --reverse | sort --unique --key=1,1
-    } | sort | uniq --unique
+restore-day-field () {
+    # Replace the separator of date and time with a space.
+    while read line; do
+        echo ${line:0:10} ${line:11}
+    done
 }
 
-# Delete all but last of each day in the month.
-monthButLastInDay | deleteSnapshots
+filter-date() {
+    (( 1 <= $# && $# <= 2)) || die "Usage: filter-date <key1> [key2]"
+    sort --unique --key=$1${2:+,$2} --field=- --stable
+}
+
+best-for-day() {
+    # Help `sort` find the third field (the day).
+    # (could be avoided if `sort` supported multiple field separators)
+    patch-day-field | filter-date 1 3 | restore-day-field
+}
+
+best-for-month() {
+    filter-date 1 2
+}
+
+best-for-year() {
+    filter-date 1 1
+}
+
+now=$(now)
+this_day=${now%% *}
+this_month=${this_day%-*}
+this_year=${this_month%-*}
+
+this-day() {
+    egrep "^$this_day.*"
+}
+
+this-month() {
+    egrep "^$this_month.*"
+}
+
+this-year() {
+    egrep "^$this_year.*"
+}
+
+today() {
+    this-day
+}
+
+last-3-years() {
+    egrep "^($this_year|$((this_year-1))|$((this_year-2))).*"
+}
+
+without-repetitions() {
+    sort --reverse | uniq --unique
+}
+
+# Prints input lines that are not filtered out.
+not() {
+    (( $# == 1)) || die "Usage: not <filter>"
+    # Duplicate undesired entries and eliminate them.
+    tee >($1) | without-repetitions
+}
+
+neither() {
+    (( $# == 2)) || die "Usage: neither <filter1> <filter2>"
+    # Replicate the entries that should be eliminated.
+    tee >($1) >($2) | without-repetitions
+}
+
+delete-subvolumes() {
+    while read subvolume; do
+        local path=$pool/$subvolume
+        btrfs subvolume delete "$path" > /dev/null
+        echo "Removed subvolume $path"
+    done
+}
+
+#---[ Cleanup tasks ]---
+
+# Delete empty subvolumes (created for testing).
+find "$pool" -maxdepth 1 -type d -empty -print0 | \
+    xargs -0 -n 1 -r btrfs subvolume delete | \
+    sed -e "s/Delete subvolume[^:]*:[^']*'\([^']*\)'/Removed empty subvolume \1/g"
+
+# Keep one subvolume per year when older than 3 years.
+subvolume-names "$pool" | neither last-3-years best-for-year | \
+    delete-subvolumes
+
+# Keep one subvolume per month for previous years.
+subvolume-names "$pool" | neither this-year best-for-month | \
+    delete-subvolumes
+
+# Keep one subvolume per day for previous days.
+subvolume-names "$pool" | neither today best-for-day | \
+    delete-subvolumes

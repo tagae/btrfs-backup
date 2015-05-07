@@ -32,15 +32,14 @@ else
     progress=cat
 fi
 
-# btrfs quirk: the snapshots used with 'send' must physically be on disk.
+# btrfs quirk: the subvolumes used with 'send' must physically be on disk.
 sync
 
-# For incremental sending, find most recent snapshot in $store with
+# For incremental sending, find most recent subvolume in $store with
 # a parent in $pool, and store it in $previous. In passing, find
-# most recent snapshot and store it in $last.
-while read line; do
-    subvol=$(dirname "$pool")/${line#*/} # keep path only
-    name=$(basename "$subvol")
+# most recent subvolume and store it in $last.
+while read subvolume; do
+    name=$(basename "$subvolume")
 
     if [ ! -d "$store/$name" ]; then
 
@@ -48,7 +47,7 @@ while read line; do
 
         inProgress=$store/$name
 
-        ionice -c3 btrfs send ${previous:+-p "$pool/$previous"} "$subvol" | \
+        ionice -c3 btrfs send ${previous:+-p "$pool/$previous"} "$subvolume" | \
             $progress | ionice -c3 btrfs receive "$store"
 
         unset inProgress
@@ -56,4 +55,4 @@ while read line; do
 
     previous=$name
 
-done < <(btrfs subvolume list -o --sort gen "$pool")
+done < <(list-subvolumes "$pool")

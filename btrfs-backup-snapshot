@@ -10,9 +10,9 @@ source "$scripts/btrfs-backup-lib.sh"
 
 usage() {
     cat >&2 <<EOF
-Usage: $script <subvol> <pool>
+Usage: $script <subvolume> <pool>
 
-Takes a read-only snapshot of subvolume <subvol>.
+Takes a read-only snapshot of <subvolume>.
 Stores the snapshot in <pool>.
 
 Example: $script /home /var/backup/home
@@ -21,11 +21,11 @@ EOF
 }
 
 (( $# == 2 )) || usage
-subvol=$(realpath "$1")
+subvolume=$(realpath "$1")
 pool=$(realpath "$2")
 
 use-pool "$pool"
 
 name=$(now)
-btrfs subvolume snapshot -r "$subvol" "$pool/$name" > /dev/null
-echo "Created read-only snapshot $name of $subvol in $pool"
+btrfs subvolume snapshot -r "$subvolume" "$pool/$name" > /dev/null
+echo "Created read-only snapshot $name of $subvolume in $pool"
