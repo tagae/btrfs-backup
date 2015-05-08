@@ -109,19 +109,14 @@ delete-subvolumes() {
 
 #---[ Cleanup tasks ]---
 
-# Delete empty subvolumes (created for testing).
+# Delete empty subvolumes (usually created for testing).
 find "$pool" -maxdepth 1 -type d -empty -print0 | \
     xargs -0 -n 1 -r btrfs subvolume delete | \
     sed -e "s/Delete subvolume[^:]*:[^']*'\([^']*\)'/Removed empty subvolume \1/g"
 
-# Keep one subvolume per year when older than 3 years.
-subvolume-names "$pool" | neither last-3-years best-for-year | \
-    delete-subvolumes
-
-# Keep one subvolume per month for previous years.
-subvolume-names "$pool" | neither this-year best-for-month | \
-    delete-subvolumes
-
-# Keep one subvolume per day for previous days.
-subvolume-names "$pool" | neither today best-for-day | \
-    delete-subvolumes
+# Run cleanup filters.
+if [ -d "$scripts"/cleanup.d ]; then
+    for filter in "$scripts"/cleanup.d/*.filter; do
+        subvolume-names "$pool" | (source "$filter") | delete-subvolumes
+    done
+fi

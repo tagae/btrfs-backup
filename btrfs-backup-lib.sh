@@ -132,7 +132,7 @@ bring-down() {
     (( $# == 1 )) || die "Usage: bring-down <pool>"
     local pool=$1
     if [ -v inProgress ] && [ -d "$inProgress" ]; then
-        echo "Removing incomplete snapshot: $inProgress" >&2
+        echo "Removing incomplete subvolume: $inProgress" >&2
         btrfs subvolume delete "$inProgress" > /dev/null
     fi
     if [ -e "$pool/$mountfile" ]; then
@@ -165,10 +165,30 @@ use-pool() {
 
 # List subvolume names from most to least recent (irrespective of the name).
 subvolume-names() {
-    (( $# == 1 )) || die "Usage: list-subvolume-names <pool>"
+    local order=-
+    # Process options.
+    TEMP=$(getopt --longoptions ascending -o a -- "$@")
+    eval set -- $TEMP
+    while true; do
+        case "$1" in
+            --ascending|-a)
+                shift
+                order=+
+                ;;
+            --)
+                shift
+                break
+                ;;
+            *)
+                echo "Unexpected output from getopt" >&2
+                exit 1
+                ;;
+        esac
+    done
+    (( $# == 1 )) || die "Usage: list-subvolume-names [--ascending|-a] <pool>"
     local pool=$1
     local parent=$(dirname "$pool")
-    btrfs subvolume list -o --sort=-gen "$pool" | \
+    btrfs subvolume list -o --sort=${order}gen "$pool" | \
         while read line; do
             echo ${line##*/} # keep volume name only
         done

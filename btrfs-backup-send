@@ -35,24 +35,17 @@ fi
 # btrfs quirk: the subvolumes used with 'send' must physically be on disk.
 sync
 
-# For incremental sending, find most recent subvolume in $store with
-# a parent in $pool, and store it in $previous. In passing, find
-# most recent subvolume and store it in $last.
-while read subvolume; do
-    name=$(basename "$subvolume")
-
+# Copy all subvolumes from $pool to $store,
+# proceeding from the oldest to the latest.
+copying="Copying the whole of"
+while read name; do
     if [ ! -d "$store/$name" ]; then
-
-        echo "Copying subvolume $name to $store${previous:+ incrementally}"
-
+        echo "$copying subvolume $name to $store"
         inProgress=$store/$name
-
-        ionice -c3 btrfs send ${previous:+-p "$pool/$previous"} "$subvolume" | \
+        ionice -c3 btrfs send ${parent:+-p "$parent"} "$pool/$name" | \
             $progress | ionice -c3 btrfs receive "$store"
-
         unset inProgress
     fi
-
-    previous=$name
-
-done < <(list-subvolumes "$pool")
+    parent="$pool/$name"
+    copying="Incrementally copying"
+done < <(subvolume-names --ascending "$pool")
