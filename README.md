@@ -53,12 +53,11 @@ Store a read-only snapshot of a subvolume into a pool:
 
     btrfs-backup-snapshot /home /var/backup/home
 
-Pools can be sent to other pools:
+Entire pools can be sent to other pools:
 
     btrfs-backup-send /var/backup/home /mnt/external/backup/home
 
-You can do this to copy your local snapshots to external storage as a
-safeguard.
+In this way you can copy your local snapshots to external storage.
 
 Pools can be cleaned up to remove old snapshots:
 
