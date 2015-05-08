@@ -1,0 +1,7 @@
+#!/bin/bash
+
+this=$(realpath "$0" || echo "Please install GNU coreutils" >&2)
+recipes=$(dirname "$this")
+scripts=$(dirname "$recipes")
+
+"$scripts"/btrfs-backup /home /var/backup/home /mnt/external/backup/home
