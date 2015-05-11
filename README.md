@@ -27,7 +27,7 @@ Create then a backup subvolume that will contain snapshot pools:
 
     btrfs subvolume create /mnt/main/backup
 
-And proceed to create the respective pools:
+and proceed to create the respective pools for your subvolumes of interest:
 
     btrfs subvolume create /mnt/main/backup/root
     btrfs subvolume create /mnt/main/backup/home
@@ -43,7 +43,7 @@ the backups (i.e. `/var/backup`) being mounted as well. Indexing tools will not
 traverse the backups unnecessarily.
 
 The `/var/backup` pool acts as a local _time machine_ to which you can resort
-if need be.
+when needed.
 
 
 Usage
@@ -64,8 +64,8 @@ Pools can be cleaned up to remove old snapshots:
     btrfs-backup-clean /var/backup/home
     btrfs-backup-clean /mnt/external/backup/home
 
-The cleanup policy is expressed in terms of _filters_ defined in the
-`cleanup.d` directory.
+The cleanup policy (i.e., what an "old" snapshot is) is expressed in terms of
+_filters_ defined in the `cleanup.d` directory.
 
 The following is an all-in-one command that is equivalent to all commands shown
 previously:
@@ -85,6 +85,14 @@ every 3 hours.
 
 The `config` branch of this repository contains examples of scripts you can
 invoke as a periodic job. These can be symlinked to your `/usr/local/bin`.
+
+
+Possible improvements
+---------------------
+
+* Have pool-specific cleanup policies, when a `.btrfs-backup-cleanup.d`
+  subdirectory is found inside a snapshot pool.  The current global 'cleanup.d`
+  directory would serve as default policy.
 
 
 Acknowledgements
