@@ -123,8 +123,8 @@ bring-up() {
             echo "$mountPoint" > "$pool/$mountfile"
             return
         fi
-        [ "$mountPoint" == "/" ] && die "Nonexistent snapshot pool $pool"
         mountPoint=$(dirname "$mountPoint")
+        [ "$mountPoint" == "/" ] && die "Nonexistent snapshot pool $pool"
     done
 }
 
