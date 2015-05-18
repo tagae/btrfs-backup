@@ -185,7 +185,7 @@ subvolume-names() {
                 ;;
         esac
     done
-    (( $# == 1 )) || die "Usage: list-subvolume-names [--ascending|-a] <pool>"
+    (( $# == 1 )) || die "Usage: subvolume-names [--ascending|-a] <pool>"
     local pool=$1
     local parent=$(dirname "$pool")
     btrfs subvolume list -o --sort=${order}gen "$pool" | \
