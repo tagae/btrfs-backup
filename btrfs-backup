@@ -12,7 +12,7 @@ usage() {
     cat >&2 <<EOF
 Usage: $script <subvol> <pool> <store> [<store2> <store3> ...]
 
-Takes a snapshot of <subvol> into <pool>, and sends <pool> to the specified
+Takes a snapshot of <subvol> into <pool>, and copies <pool> to the specified
 stores.
 
 Example: btrfs-backup / /var/backup/home /mnt/backup/external/home /mnt/traveller/backup/home
@@ -33,7 +33,7 @@ while (( $# > 0 )); do
     store=$1
     shift
     if [ -d "$store" ]; then
-        "$scripts"/btrfs-backup-send "$pool" "$store"
+        "$scripts"/btrfs-backup-copy "$pool" "$store"
         "$scripts"/btrfs-backup-cleanup "$store"
     fi
 done
