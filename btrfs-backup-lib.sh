@@ -9,24 +9,13 @@
 set -o nounset
 set -o errexit
 set -o pipefail
-
 [ -v DEBUG ] && set -o xtrace
 
-if [ ! -v script ]; then
-    script=${0##*/} # shortcut for `basename $0`.
-fi
-
-if [ ! -v this ]; then
-    this=$(realpath "$0")
-fi
-
-if [ ! -v lockfile ]; then
-    lockfile=.btrfs-backup-lock
-fi
-
-if [ ! -v mountfile ]; then
-    mountfile=.btrfs-backup-mount-point
-fi
+: ${script:=${0##*/}} # shortcut for `basename $0`.
+: ${this:=$(realpath "$0")}
+: ${lockfile:=.btrfs-backup-lock}
+: ${mountfile:=.btrfs-backup-mount-point}
+: ${stampfile:=.btrfs-backup-sync}
 
 die() {
     # Don't loop on ERR.
