@@ -15,7 +15,6 @@ set -o pipefail
 : ${this:=$(realpath "$0")}
 : ${lockfile:=.btrfs-backup-lock}
 : ${mountfile:=.btrfs-backup-mount-point}
-: ${stampfile:=.btrfs-backup-sync}
 
 die() {
     # Don't loop on ERR.
@@ -82,7 +81,7 @@ function join {
 }
 
 ensure-command() {
-    (( 1 <= $# && $# <= 2 )) || echo "Usage: ensure-command <command> [package]"
+    (( 1 <= $# && $# <= 2 )) || die "Usage: ensure-command <command> [package]"
     command="$1"
     package="${2:-$1}"
     command -v "$command" > /dev/null || \
@@ -120,9 +119,14 @@ bring-up() {
 bring-down() {
     (( $# == 1 )) || die "Usage: bring-down <pool>"
     local pool=$1
-    if [ -v inProgress ] && [ -d "$inProgress" ]; then
-        echo "Removing incomplete subvolume: $inProgress" >&2
-        btrfs subvolume delete "$inProgress" > /dev/null
+    if [ -v inProgress ] && [ -e "$inProgress" ]; then
+         if [ -d "$inProgress" ]; then
+             echo "Removing incomplete subvolume: $inProgress" >&2
+             btrfs subvolume delete "$inProgress" > /dev/null
+         elif [ -f "$inProgress" ]; then
+             echo "Removing incomplete subvolume serialisation: $inProgress" >&2
+             rm "$inProgress"
+         fi
     fi
     if [ -e "$pool/$mountfile" ]; then
         mountPoint=$(<"$pool/$mountfile")
