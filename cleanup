@@ -6,10 +6,11 @@
 set -o errexit
 
 this="$(realpath "$0")"
-lib="$(dirname "$this")/lib.sh"
-source "$lib"
+lib="$(dirname "$this")"
+script="$(basename "$this")"
 
-source "$lib/$script-vocabulary.sh"
+source "$lib/common.sh"
+source "$lib/$script.sh"
 
 usage() {
     cat >&2 <<EOF

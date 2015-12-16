@@ -1,12 +1,15 @@
 #!/bin/bash
 
-# © 2015 Sebastián González
+# © 2015–2016 Sebastián González
 # http://www.apache.org/licenses/LICENSE-2.0
 
-this=$(realpath "$0" || echo "Please install GNU coreutils" >&2)
-scripts=$(dirname "$this")
+set -o errexit
 
-source "$scripts/btrfs-backup-lib.sh"
+this="$(realpath "$0")"
+lib="$(dirname "$this")"
+script="$(basename "$this")"
+
+source "$lib/common.sh"
 
 usage() {
     cat >&2 <<EOF
