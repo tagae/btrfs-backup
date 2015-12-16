@@ -1,8 +1,8 @@
 Cleanup Filters
 ===============
 
-The filters in this directory describe the snapshots that are cleaned up by the
-`btrfs-backup-cleanup` command.  For instance,
+The filters in the `cleanup.d` directory describe the snapshots that are
+cleaned up by the `btrfs-backup-cleanup` command.  For instance,
 
     not today
 
