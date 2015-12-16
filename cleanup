@@ -1,0 +1,51 @@
+#!/bin/bash
+
+# © 2015–2016 Sebastián González
+# http://www.apache.org/licenses/LICENSE-2.0
+
+set -o errexit
+
+this="$(realpath "$0")"
+lib="$(dirname "$this")/lib.sh"
+source "$lib"
+
+source "$lib/$script-vocabulary.sh"
+
+usage() {
+    cat >&2 <<EOF
+Usage: $script <pool>
+
+Removes old backups from snapshot pool <pool>.
+
+Example: $script /var/backup/home
+EOF
+    exit 1
+}
+
+(( $# == 1 )) || usage
+
+pool="$1"
+
+use-pool "$pool"
+
+delete-subvolumes() {
+    while read subvolume; do
+        local path="$pool/$subvolume"
+        btrfs subvolume delete "$path" > /dev/null
+        echo "Removed subvolume $path"
+    done
+}
+
+#---[ Cleanup tasks ]---
+
+# Delete empty subvolumes (usually created for testing).
+find "$pool" -maxdepth 1 -type d -empty -print0 | \
+    xargs -0 -n 1 -r btrfs subvolume delete | \
+    sed -e "s/Delete subvolume[^:]*:[^']*'\([^']*\)'/Removed empty subvolume \1/g"
+
+# Run cleanup filters.
+if [ -d "$lib"/cleanup.d ]; then
+    for filter in "$lib"/cleanup.d/*.sh; do
+        subvolume-names "$pool" | (source "$filter") | delete-subvolumes
+    done
+fi

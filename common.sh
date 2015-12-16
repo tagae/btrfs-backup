@@ -1,4 +1,4 @@
-# Copyright 2015 Sebastian Gonzalez
+# © 2015–2016 Sebastián González
 # http://www.apache.org/licenses/LICENSE-2.0
 
 # Common code for btrfs-backup scripts.
